@@ -1,0 +1,25 @@
+# Credentials — never commit these
+.env
+
+# Detection data (can be large)
+detections.csv
+
+# YOLOv8 auto-downloaded model weights
+*.pt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
