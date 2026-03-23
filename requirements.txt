@@ -1,4 +1,5 @@
-ultralytics
+onnxruntime
+numpy
+pandas
 # opencv-python is installed via apt: sudo apt install -y python3-opencv
 # Use: python3 -m venv --system-site-packages venv  (so venv inherits it)
-pandas

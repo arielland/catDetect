@@ -4,8 +4,9 @@
 # Detection data (can be large)
 detections.csv
 
-# YOLOv8 auto-downloaded model weights
+# Model weights (large binary files)
 *.pt
+*.onnx
 
 # Python
 __pycache__/
