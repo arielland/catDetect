@@ -11,6 +11,7 @@ Usage:
     python detect.py --show             # show live preview window
     python detect.py --phase before     # tag entries as 'before' phase
     python detect.py --phase after      # tag entries as 'after' phase
+    python detect.py --snapshot         # save one frame as snapshot.jpg and exit
 """
 
 import argparse
@@ -135,6 +136,8 @@ def main():
                         help="Label for this recording phase, e.g. 'before' or 'after'")
     parser.add_argument("--show",       action="store_true",
                         help="Show live preview window (requires display)")
+    parser.add_argument("--snapshot",   action="store_true",
+                        help="Capture one frame, draw detections, save as snapshot.jpg and exit")
     parser.add_argument("--model",      default=MODEL_PATH,
                         help="Path to yolov8n.onnx")
     args = parser.parse_args()
@@ -158,6 +161,39 @@ def main():
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera index {args.camera}")
+
+    # ── Snapshot mode ────────────────────────────────────────────────────────
+    if args.snapshot:
+        # Grab a few frames first so the camera has time to adjust exposure
+        for _ in range(5):
+            cap.read()
+        ret, frame = cap.read()
+        cap.release()
+        if not ret:
+            print("ERROR: could not grab frame from camera.")
+            return
+
+        blob, ratio, pad_w, pad_h = preprocess(frame)
+        outputs = session.run(None, {input_name: blob})
+        boxes, confs = postprocess(outputs, args.confidence, ratio, pad_w, pad_h)
+
+        # Draw bounding boxes on the frame
+        for (x1, y1, x2, y2), conf in zip(boxes, confs):
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(frame, f"cat {conf:.0%}", (x1, max(y1 - 8, 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        # Add timestamp and detection count
+        label = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  cats={len(boxes)}"
+        cv2.putText(frame, label, (10, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        out_path = "snapshot.jpg"
+        cv2.imwrite(out_path, frame)
+        print(f"Snapshot saved → {out_path}  (cats detected: {len(boxes)})")
+        if boxes:
+            print(f"  confidence: {[f'{c:.0%}' for c in confs]}")
+        return
 
     print(f"Recording  phase='{args.phase}'  interval={args.interval}s  "
           f"confidence>={args.confidence}  |  Ctrl+C to stop")
