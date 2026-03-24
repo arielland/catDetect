@@ -158,7 +158,7 @@ def main():
 
     setup_log(LOG_FILE)
 
-    cap = cv2.VideoCapture(args.camera)
+    cap = cv2.VideoCapture(args.camera, cv2.CAP_V4L2)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera index {args.camera}")
 
