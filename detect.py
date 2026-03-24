@@ -29,6 +29,8 @@ COCO_CAT_CLASS  = 15
 LOG_FILE        = "detections.csv"
 MODEL_PATH      = "yolov8n.onnx"
 INPUT_SIZE      = 640
+SNAPSHOTS_DIR   = "snapshots"
+MAX_SNAPSHOTS   = 50   # oldest deleted automatically beyond this
 
 
 # ── Pre/post-processing ──────────────────────────────────────────────────────
@@ -101,6 +103,36 @@ def postprocess(outputs, conf_threshold: float, ratio: float,
                    for i in indices]
     final_confs = [float(confidences[i]) for i in indices]
     return final_boxes, final_confs
+
+
+# ── Snapshots ────────────────────────────────────────────────────────────────
+
+def draw_boxes(frame: np.ndarray, boxes: list, confs: list) -> np.ndarray:
+    """Draw bounding boxes and timestamp onto a frame copy."""
+    out = frame.copy()
+    for (x1, y1, x2, y2), conf in zip(boxes, confs):
+        cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        cv2.putText(out, f"cat {conf:.0%}", (x1, max(y1 - 8, 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    label = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  cats={len(boxes)}"
+    cv2.putText(out, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    return out
+
+
+def save_cat_snapshot(frame: np.ndarray, boxes: list, confs: list) -> str:
+    """Save an annotated snapshot to the snapshots folder. Returns the file path."""
+    Path(SNAPSHOTS_DIR).mkdir(exist_ok=True)
+    annotated = draw_boxes(frame, boxes, confs)
+    ts = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    path = str(Path(SNAPSHOTS_DIR) / f"cat_{ts}.jpg")
+    cv2.imwrite(path, annotated)
+
+    # Cleanup: keep only the newest MAX_SNAPSHOTS files
+    snaps = sorted(Path(SNAPSHOTS_DIR).glob("cat_*.jpg"))
+    for old in snaps[:-MAX_SNAPSHOTS]:
+        old.unlink()
+
+    return path
 
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -180,19 +212,9 @@ def main():
         outputs = session.run(None, {input_name: blob})
         boxes, confs = postprocess(outputs, args.confidence, ratio, pad_w, pad_h)
 
-        # Draw bounding boxes on the frame
-        for (x1, y1, x2, y2), conf in zip(boxes, confs):
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame, f"cat {conf:.0%}", (x1, max(y1 - 8, 10)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-
-        # Add timestamp and detection count
-        label = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  cats={len(boxes)}"
-        cv2.putText(frame, label, (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
+        annotated = draw_boxes(frame, boxes, confs)
         out_path = "snapshot.jpg"
-        cv2.imwrite(out_path, frame)
+        cv2.imwrite(out_path, annotated)
         print(f"Snapshot saved → {out_path}  (cats detected: {len(boxes)})")
         if boxes:
             print(f"  confidence: {[f'{c:.0%}' for c in confs]}")
@@ -222,9 +244,11 @@ def main():
                 log_event(LOG_FILE, args.phase, len(boxes), confs)
 
                 if boxes:
+                    snap_path = save_cat_snapshot(frame, boxes, confs)
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] "
                           f"CAT DETECTED x{len(boxes)}  "
-                          f"conf={[f'{c:.0%}' for c in confs]}")
+                          f"conf={[f'{c:.0%}' for c in confs]}  "
+                          f"→ {snap_path}")
 
                 if args.show:
                     for (x1, y1, x2, y2), conf in zip(boxes, confs):

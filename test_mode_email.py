@@ -129,12 +129,31 @@ def build_body() -> str:
 
 # ── Send ──────────────────────────────────────────────────────────────────────
 
+def attach_snapshots(msg: MIMEMultipart, max_images: int = 5) -> int:
+    """Attach the most recent cat snapshots. Returns count attached."""
+    from email import encoders
+    from email.mime.base import MIMEBase
+    snaps = sorted(Path("snapshots").glob("cat_*.jpg"))[-max_images:]
+    for snap in snaps:
+        with open(snap, "rb") as f:
+            part = MIMEBase("image", "jpeg")
+            part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition",
+                        f'attachment; filename="{snap.name}"')
+        msg.attach(part)
+    return len(snaps)
+
+
 def send_email(subject: str, body: str):
     msg = MIMEMultipart()
     msg["From"]    = SMTP_USER
     msg["To"]      = EMAIL_TO
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
+    n = attach_snapshots(msg)
+    if n:
+        print(f"Attached {n} cat snapshot(s)")
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
         server.ehlo()

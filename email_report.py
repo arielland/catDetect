@@ -152,6 +152,21 @@ def attach_csv(msg: MIMEMultipart, csv_path: str):
     msg.attach(part)
 
 
+def attach_snapshots(msg: MIMEMultipart, snapshots_dir: str = "snapshots",
+                     max_images: int = 10) -> int:
+    """Attach the most recent cat detection snapshots. Returns count attached."""
+    snaps = sorted(Path(snapshots_dir).glob("cat_*.jpg"))[-max_images:]
+    for snap in snaps:
+        with open(snap, "rb") as f:
+            part = MIMEBase("image", "jpeg")
+            part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition",
+                        f'attachment; filename="{snap.name}"')
+        msg.attach(part)
+    return len(snaps)
+
+
 def send_email(subject: str, body: str, csv_path: str):
     if not SMTP_USER or not SMTP_PASSWORD:
         raise ValueError(
@@ -164,6 +179,9 @@ def send_email(subject: str, body: str, csv_path: str):
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
     attach_csv(msg, csv_path)
+    n = attach_snapshots(msg)
+    if n:
+        print(f"Attached {n} cat snapshot(s)")
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
         server.ehlo()
