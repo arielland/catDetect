@@ -127,7 +127,8 @@ def log_event(path: str, phase: str, cat_count: int, confs: list):
 
 def main():
     parser = argparse.ArgumentParser(description="Cat detection logger (ONNX)")
-    parser.add_argument("--camera",     type=int,   default=0)
+    parser.add_argument("--camera",     default="/dev/video0",
+                        help="Camera index (0,1..) or device path (/dev/video0)")
     parser.add_argument("--interval",   type=float, default=2.0,
                         help="Seconds between detection checks")
     parser.add_argument("--confidence", type=float, default=0.4,
@@ -158,7 +159,9 @@ def main():
 
     setup_log(LOG_FILE)
 
-    cap = cv2.VideoCapture(args.camera, cv2.CAP_V4L2)
+    # Accept either integer index or /dev/videoX path
+    cam = int(args.camera) if str(args.camera).isdigit() else args.camera
+    cap = cv2.VideoCapture(cam, cv2.CAP_V4L2)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera index {args.camera}")
 
