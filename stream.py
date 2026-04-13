@@ -45,7 +45,7 @@ cap = None
 
 def open_camera():
     global cap
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap = cv2.VideoCapture("/dev/video0", cv2.CAP_V4L2)
     if not cap.isOpened():
         raise RuntimeError("Cannot open camera — is detect.py still running?")
 

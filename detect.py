@@ -228,6 +228,8 @@ def main():
     # Accept either integer index or /dev/videoX path
     cam = int(args.camera) if str(args.camera).isdigit() else args.camera
     cap = cv2.VideoCapture(cam, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+    time.sleep(1)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera index {args.camera}")
 
