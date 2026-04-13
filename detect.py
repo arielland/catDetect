@@ -25,12 +25,19 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+try:
+    import RPi.GPIO as GPIO
+    GPIO_AVAILABLE = True
+except ImportError:
+    GPIO_AVAILABLE = False
+
 COCO_CAT_CLASS  = 15
 LOG_FILE        = "detections.csv"
 MODEL_PATH      = "yolov8n.onnx"
 INPUT_SIZE      = 640
 SNAPSHOTS_DIR   = "snapshots"
 MAX_SNAPSHOTS   = 50   # oldest deleted automatically beyond this
+BUZZER_PIN      = 18
 
 
 # ── Pre/post-processing ──────────────────────────────────────────────────────
@@ -135,6 +142,27 @@ def save_cat_snapshot(frame: np.ndarray, boxes: list, confs: list) -> str:
     return path
 
 
+# ── Buzzer ───────────────────────────────────────────────────────────────────
+
+def setup_buzzer():
+    if not GPIO_AVAILABLE:
+        return
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(BUZZER_PIN, GPIO.OUT)
+    GPIO.output(BUZZER_PIN, GPIO.LOW)
+
+
+def beep(times=3, on=0.15, off=0.1):
+    """Beep the active buzzer N times."""
+    if not GPIO_AVAILABLE:
+        return
+    for _ in range(times):
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)
+        time.sleep(on)
+        GPIO.output(BUZZER_PIN, GPIO.LOW)
+        time.sleep(off)
+
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 
 def setup_log(path: str):
@@ -173,6 +201,8 @@ def main():
                         help="Capture one frame, draw detections, save as snapshot.jpg and exit")
     parser.add_argument("--model",      default=MODEL_PATH,
                         help="Path to yolov8n.onnx")
+    parser.add_argument("--buzzer",     action="store_true",
+                        help="Beep GPIO 18 buzzer on cat detection")
     args = parser.parse_args()
 
     if not Path(args.model).exists():
@@ -190,6 +220,10 @@ def main():
     print("Model loaded.")
 
     setup_log(LOG_FILE)
+
+    if args.buzzer:
+        setup_buzzer()
+        print(f"Buzzer enabled on GPIO {BUZZER_PIN}")
 
     # Accept either integer index or /dev/videoX path
     cam = int(args.camera) if str(args.camera).isdigit() else args.camera
@@ -249,6 +283,8 @@ def main():
                           f"CAT DETECTED x{len(boxes)}  "
                           f"conf={[f'{c:.0%}' for c in confs]}  "
                           f"→ {snap_path}")
+                    if args.buzzer:
+                        beep(times=3)
 
                 if args.show:
                     for (x1, y1, x2, y2), conf in zip(boxes, confs):
@@ -266,6 +302,8 @@ def main():
         print("\nStopped.")
     finally:
         cap.release()
+        if args.buzzer and GPIO_AVAILABLE:
+            GPIO.cleanup()
         if args.show:
             cv2.destroyAllWindows()
 
